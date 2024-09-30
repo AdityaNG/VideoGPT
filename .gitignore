@@ -5,3 +5,6 @@ datasets/
 *.mp4
 *.egg-info
 i3d_pretrained_400.pt
+video_dataset/
+video_dataset_mini/
+ckpts/

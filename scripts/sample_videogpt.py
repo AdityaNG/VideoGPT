@@ -5,26 +5,37 @@ import torch
 from videogpt import VideoData, VideoGPT, load_videogpt
 from videogpt.utils import save_video_grid
 
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_path', type=str, default="video_dataset/")
+    parser.add_argument('--ckpt', type=str, default='lightning_logs/version_1/checkpoints/last.ckpt')
+    parser.add_argument('--batch_size', type=int, default=1)
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--ckpt', type=str, default='ucf101_uncond_gpt')
-parser.add_argument('--n', type=int, default=8)
-args = parser.parse_args()
-n = args.n
+    parser = VideoGPT.add_model_specific_args(parser)
+    return parser.parse_args()
 
-if not os.path.exists(args.ckpt):
-    gpt = load_videogpt(args.ckpt)
-else:
-    gpt = VideoGPT.load_from_checkpoint(args.ckpt)
-gpt = gpt.cuda()
-gpt.eval()
-args = gpt.hparams['args']
+def generate_video_samples(gpt: VideoGPT, batch, batch_size: int):
+    batch = {k: v.cuda() for k, v in batch.items()}
 
-args.batch_size = n
-data = VideoData(args)
-loader = data.test_dataloader()
-batch = next(iter(loader))
-batch = {k: v.cuda() for k, v in batch.items()}
+    return gpt.sample(batch_size, batch)
 
-samples = gpt.sample(n, batch)
-save_video_grid(samples, 'samples.mp4')
+def main():
+    args = parse_arguments()
+
+    if not os.path.exists(args.ckpt):
+        gpt = load_videogpt(args.ckpt)
+    else:
+        gpt = VideoGPT.load_from_checkpoint(args.ckpt)
+    gpt = gpt.cuda()
+    gpt.eval()
+    args = gpt.hparams['args']
+    
+    data = VideoData(args)
+    loader = data.test_dataloader()
+    batch = next(iter(loader))
+
+    samples = generate_video_samples(gpt, batch, args.batch_size)
+    save_video_grid(samples, 'samples.mp4')
+
+if __name__ == "__main__":
+    main()

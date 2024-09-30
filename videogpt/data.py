@@ -20,7 +20,7 @@ import pytorch_lightning as pl
 class VideoDataset(data.Dataset):
     """ Generic dataset for videos files stored in folders
     Returns BCTHW videos in the range [-0.5, 0.5] """
-    exts = ['avi', 'mp4', 'webm']
+    exts = ['avi', 'mp4', 'webm', 'mkv']
 
     def __init__(self, data_folder, sequence_length, train=True, resolution=64):
         """

@@ -10,11 +10,19 @@ We present VideoGPT: a conceptually simple architecture for scaling likelihood b
 ![VideoGPT](VideoGPT.png)
 
 ## Installation
+
+First, create a conda environment with Python 3.9:
+
+```bash
+conda create -n videogpt python=3.9 -y
+conda activate videogpt
+```
+
 Change the `cudatoolkit` version compatible to your machine.
 ```bash
-conda install --yes -c conda-forge cudatoolkit=11.0 cudnn
-pip install torch==1.7.1+cu110 torchvision==0.8.2+cu110 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
-pip install git+https://github.com/wilson1yan/VideoGPT.git
+conda install --yes -c conda-forge cudatoolkit=11.8 cudnn
+conda install pytorch==2.2.0 torchvision==0.17.0 pytorch-cuda=11.8 -c pytorch -c nvidia -y
+pip install -r requirements.txt
 ```
 
 ### Sparse Attention (Optional)
@@ -83,7 +91,13 @@ video_recon = vqvae.decode(encodings)
 ```
 
 ## Training VQ-VAE
-Use the `scripts/train_vqvae.py` script to train a VQ-VAE. Execute `python scripts/train_vqvae.py -h` for information on all available training settings. A subset of more relevant settings are listed below, along with default values.
+Use the `python3 -m scripts.train_vqvae` script to train a VQ-VAE. Execute `python3 -m scripts.train_vqvae -h` for information on all available training settings. A subset of more relevant settings are listed below, along with default values.
+
+```bash
+python3 -m scripts.train_vqvae --data_path video_dataset_mini --gpus 1 --precision 16 --val_check_interval 0.01
+python3 -m scripts.train_vqvae --data_path video_dataset_mini --gpus 1 --precision 16 --val_check_interval 0.01 --resume_from_checkpoint ckpts/vqvae_step_007899.ckpt
+```
+
 ### VQ-VAE Specific Settings
 * `--embedding_dim`: number of dimensions for codebooks embeddings
 * `--n_codes 2048`: number of codes in the codebook
@@ -105,6 +119,11 @@ Use the `scripts/train_vqvae.py` script to train a VQ-VAE. Execute `python scrip
 
 ## Training VideoGPT
 Use the `scripts/train_videogpt.py` script to train an VideoGPT model for sampling. Execute `python scripts/train_videogpt.py -h` for information on all available training settings. A subset of more relevant settings are listed below, along with default values.
+```bash
+python3 -m scripts.train_videogpt --vqvae ckpts/vqvae_step_007899.ckpt --gpus 1 --precision 16 --val_check_interval 0.01 --accumulate_grad_batches 4
+```
+
+
 ### VideoGPT Specific Settings
 * `--vqvae kinetics_stride4x4x4`: path to a vqvae checkpoint file
 * `--n_cond_frames 0`: number of frames to condition on. `0` represents a non-frame conditioned model
@@ -130,6 +149,10 @@ Use the `scripts/train_videogpt.py` script to train an VideoGPT model for sampli
 
 ## Sampling VideoGPT
 VideoGPT models can be sampled using the `scripts/sample_videogpt.py`. You can specify a path to a checkpoint during training. You may need to install `ffmpeg`: `sudo apt-get install ffmpeg`
+```bash
+python3 -m scripts.sample_videogpt --ckpt lightning_logs/version_21/checkpoints/last.ckpt
+```
+
 
 ## Evaluation
 Evaluation is done primarily using [Frechet Video Distance (FVD)](https://arxiv.org/abs/1812.01717) for BAIR and Kinetics, and [Inception Score](https://arxiv.org/abs/1606.03498) for UCF-101. Inception Score can be computed by generating samples and using the code from the [TGANv2 repo](https://github.com/pfnet-research/tgan2). FVD can be computed through `python scripts/compute_fvd.py`, which runs a PyTorch-ported version of the [original codebase](https://github.com/google-research/google-research/tree/master/frechet_video_distance)

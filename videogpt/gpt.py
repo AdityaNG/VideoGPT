@@ -1,6 +1,6 @@
 import os
 import itertools
-import numpy as np
+from datetime import datetime
 from tqdm import tqdm
 import argparse
 
@@ -12,9 +12,7 @@ import pytorch_lightning as pl
 
 from .resnet import resnet34
 from .attention import AttentionStack, LayerNorm, AddBroadcastPosEmbed
-from .utils import shift_dim
-
-
+from .utils import shift_dim, save_video_grid
 class VideoGPT(pl.LightningModule):
     def __init__(self, args):
         super().__init__()
@@ -26,7 +24,8 @@ class VideoGPT(pl.LightningModule):
         if not os.path.exists(args.vqvae):
             self.vqvae = load_vqvae(args.vqvae)
         else:
-            self.vqvae =  VQVAE.load_from_checkpoint(args.vqvae)
+            print('vqvae from ckpt', args.vqvae)
+            self.vqvae = VQVAE.load_from_checkpoint(args.vqvae)
         for p in self.vqvae.parameters():
             p.requires_grad = False
         self.vqvae.codebook._need_init = False
@@ -138,7 +137,7 @@ class VideoGPT(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         self.vqvae.eval()
-        x = batch['video']
+        x = batch['video'].clone()
 
         cond = dict()
         if self.args.class_cond:
@@ -152,6 +151,40 @@ class VideoGPT(pl.LightningModule):
             x = shift_dim(x, 1, -1)
 
         loss, _ = self(x, targets, cond)
+
+        if batch_idx % 10 == 0:
+            self.log('train/loss', loss, prog_bar=True)
+
+        if batch_idx % 1000 == 0:
+            with torch.no_grad():
+                batch_size = x.shape[0]
+
+                samples_gt = torch.clamp(batch['video'].clone(), -0.5, 0.5) + 0.5
+
+                _, samples_vqvae, _ = self.vqvae.forward(batch['video'].clone())
+                samples_vqvae = torch.clamp(samples_vqvae, -0.5, 0.5) + 0.5
+
+                samples = self.sample(batch_size, batch)
+
+                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_video = os.path.join(
+                    self.logger.log_dir,
+                    f"train_{current_time}_{str(batch_idx).zfill(8)}.mp4"
+                )
+                output_video_vqvae = os.path.join(
+                    self.logger.log_dir,
+                    f"train_vqvae_{current_time}_{str(batch_idx).zfill(8)}.mp4"
+                )
+                output_video_gt = os.path.join(
+                    self.logger.log_dir,
+                    f"train_gt_{current_time}_{str(batch_idx).zfill(8)}.mp4"
+                )
+
+                # samples -> (B, C, T, H, W)
+                save_video_grid(samples, output_video)
+                save_video_grid(samples_vqvae, output_video_vqvae)
+                save_video_grid(samples_gt, output_video_gt)
+
         return loss
 
     def validation_step(self, batch, batch_idx):

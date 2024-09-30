@@ -1,6 +1,8 @@
+import os
 import math
 import argparse
 import numpy as np
+from datetime import datetime
 
 import pytorch_lightning as pl
 import torch
@@ -9,7 +11,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 
 from .attention import MultiHeadAttention
-from .utils import shift_dim
+from .utils import shift_dim, save_video_grid
 
 class VQVAE(pl.LightningModule):
     def __init__(self, args):
@@ -60,6 +62,33 @@ class VQVAE(pl.LightningModule):
         recon_loss, _, vq_output = self.forward(x)
         commitment_loss = vq_output['commitment_loss']
         loss = recon_loss + commitment_loss
+
+        if batch_idx % 10 == 0:
+            self.log('train/recon_loss', recon_loss, prog_bar=True)
+            self.log('train/perplexity', vq_output['perplexity'], prog_bar=True)
+            self.log('train/commitment_loss', vq_output['commitment_loss'], prog_bar=True)
+
+        if batch_idx % 100 == 0:
+            with torch.no_grad():
+                _, samples, _ = self.forward(x)
+                samples = torch.clamp(samples, -0.5, 0.5) + 0.5
+
+                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_video = os.path.join(
+                    self.logger.log_dir,
+                    f"train_{current_time}_{str(batch_idx).zfill(8)}.mp4"
+                )
+                output_video_gt = os.path.join(
+                    self.logger.log_dir,
+                    f"train_gt_{current_time}_{str(batch_idx).zfill(8)}.mp4"
+                )
+
+                x_out = torch.clamp(x, -0.5, 0.5) + 0.5
+
+                # samples -> (B, C, T, H, W)
+                save_video_grid(samples, output_video)
+                save_video_grid(x_out, output_video_gt)
+
         return loss
 
     def validation_step(self, batch, batch_idx):
