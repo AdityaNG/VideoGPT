@@ -151,6 +151,7 @@ python3 -m scripts.train_videogpt --vqvae ckpts/vqvae_step_007899.ckpt --gpus 1 
 VideoGPT models can be sampled using the `scripts/sample_videogpt.py`. You can specify a path to a checkpoint during training. You may need to install `ffmpeg`: `sudo apt-get install ffmpeg`
 ```bash
 python3 -m scripts.sample_videogpt --ckpt lightning_logs/version_21/checkpoints/last.ckpt
+python3 -m scripts.reconstruct_vqvae --ckpt ckpts/vqvae_step_007899.ckpt
 ```
 
 

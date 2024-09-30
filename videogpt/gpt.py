@@ -29,7 +29,7 @@ class VideoGPT(pl.LightningModule):
         for p in self.vqvae.parameters():
             p.requires_grad = False
         self.vqvae.codebook._need_init = False
-        self.vqvae.eval()
+        # self.vqvae.eval()  # removed this because it causes a bug
 
         # ResNet34 for frame conditioning
         self.use_frame_cond = args.n_cond_frames > 0
@@ -136,7 +136,7 @@ class VideoGPT(pl.LightningModule):
         return loss, logits
 
     def training_step(self, batch, batch_idx):
-        self.vqvae.eval()
+        # self.vqvae.eval()  vqvae.codebook._need_init = False
         x = batch['video'].clone()
 
         cond = dict()
