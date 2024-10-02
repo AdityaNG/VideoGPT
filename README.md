@@ -94,8 +94,8 @@ video_recon = vqvae.decode(encodings)
 Use the `python3 -m scripts.train_vqvae` script to train a VQ-VAE. Execute `python3 -m scripts.train_vqvae -h` for information on all available training settings. A subset of more relevant settings are listed below, along with default values.
 
 ```bash
-python3 -m scripts.train_vqvae --data_path video_dataset_mini --gpus 1 --precision 16 --val_check_interval 0.01
-python3 -m scripts.train_vqvae --data_path video_dataset_mini --gpus 1 --precision 16 --val_check_interval 0.01 --resume_from_checkpoint ckpts/vqvae_step_007899.ckpt
+python3 -m scripts.train_vqvae --data_path video_dataset_mini --gpus 1 --precision 16 --val_check_interval 0.005 --accumulate_grad_batches 16
+python3 -m scripts.train_vqvae --data_path video_dataset_mini --gpus 1 --precision 16 --val_check_interval 0.01 --accumulate_grad_batches 4 --resume_from_checkpoint ckpts/vqvae_step_007899.ckpt
 ```
 
 ### VQ-VAE Specific Settings
@@ -120,7 +120,8 @@ python3 -m scripts.train_vqvae --data_path video_dataset_mini --gpus 1 --precisi
 ## Training VideoGPT
 Use the `scripts/train_videogpt.py` script to train an VideoGPT model for sampling. Execute `python scripts/train_videogpt.py -h` for information on all available training settings. A subset of more relevant settings are listed below, along with default values.
 ```bash
-python3 -m scripts.train_videogpt --vqvae ckpts/vqvae_step_007899.ckpt --gpus 1 --precision 16 --val_check_interval 0.01 --accumulate_grad_batches 4
+python3 -m scripts.train_videogpt --data_path video_dataset_mini --vqvae ckpts/vqvae-epoch=00-step=000799.ckpt --gpus 1 --precision 16 --val_check_interval 0.01 --accumulate_grad_batches 16
+python3 -m scripts.train_videogpt --data_path video_dataset_mini --vqvae ckpts/vqvae-epoch=00-step=000799.ckpt --gpus 1 --precision 16 --val_check_interval 0.01 --accumulate_grad_batches 128 --resume_from_checkpoint ckpts/gpt-epoch=00-step=010299.ckpt
 ```
 
 

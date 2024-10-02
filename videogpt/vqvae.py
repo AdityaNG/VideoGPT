@@ -26,7 +26,7 @@ class VQVAE(pl.LightningModule):
         self.pre_vq_conv = SamePadConv3d(args.n_hiddens, args.embedding_dim, 1)
         self.post_vq_conv = SamePadConv3d(args.embedding_dim, args.n_hiddens, 1)
 
-        self.codebook = Codebook(args.n_codes, args.embedding_dim)
+        self.codebook = Codebook(args.n_codes, args.embedding_dim, args.codebook_beta)
         self.save_hyperparameters()
 
     @property
@@ -63,10 +63,11 @@ class VQVAE(pl.LightningModule):
         commitment_loss = vq_output['commitment_loss']
         loss = recon_loss + commitment_loss
 
-        if batch_idx % 10 == 0:
-            self.log('train/recon_loss', recon_loss, prog_bar=True)
-            self.log('train/perplexity', vq_output['perplexity'], prog_bar=True)
-            self.log('train/commitment_loss', vq_output['commitment_loss'], prog_bar=True)
+        # if batch_idx % 10 == 0:
+        self.log('train/recon_loss', recon_loss)
+        self.log('train/perplexity', vq_output['perplexity'])
+        self.log('train/safe_perplexity', vq_output['safe_perplexity'])
+        self.log('train/commitment_loss', vq_output['commitment_loss'])
 
         if batch_idx % 100 == 0:
             with torch.no_grad():
@@ -94,12 +95,30 @@ class VQVAE(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x = batch['video']
         recon_loss, _, vq_output = self.forward(x)
-        self.log('val/recon_loss', recon_loss, prog_bar=True)
-        self.log('val/perplexity', vq_output['perplexity'], prog_bar=True)
-        self.log('val/commitment_loss', vq_output['commitment_loss'], prog_bar=True)
+        self.log('val/recon_loss', recon_loss)
+        self.log('val/perplexity', vq_output['perplexity'])
+        self.log('val/safe_perplexity', vq_output['safe_perplexity'])
+        self.log('val/commitment_loss', vq_output['commitment_loss'])
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=3e-4, betas=(0.9, 0.999))
+        self.opt = torch.optim.Adam(self.parameters(), lr=1e-4, betas=(0.9, 0.999))
+        return self.opt
+        # self.reduce_lr_on_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        #     self.opt,
+        #     mode='min',
+        #     factor=0.1,
+        #     patience=5,
+        #     verbose=True,
+        #     cooldown=5,
+        #     min_lr=1e-8,
+        # )
+        # return [self.opt], [self.reduce_lr_on_plateau]
+
+    # def optimizer_step(self, epoch_nb, batch_nb, optimizer, optimizer_i, second_order_closure=None):
+    #     self.opt.step()
+    #     self.opt.zero_grad()
+    #     if self.trainer.global_step % self.config.val_check_interval == 0:
+    #         self.reduce_lr_on_plateau.step(self.current_val_loss)
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -109,6 +128,7 @@ class VQVAE(pl.LightningModule):
         parser.add_argument('--n_hiddens', type=int, default=240)
         parser.add_argument('--n_res_layers', type=int, default=4)
         parser.add_argument('--downsample', nargs='+', type=int, default=(4, 4, 4))
+        parser.add_argument('--codebook_beta', type=float, default=0.10)
         return parser
 
 
@@ -151,12 +171,13 @@ class AttentionResidualBlock(nn.Module):
         return x + self.block(x)
 
 class Codebook(nn.Module):
-    def __init__(self, n_codes, embedding_dim):
+    def __init__(self, n_codes, embedding_dim, beta):
         super().__init__()
         self.register_buffer('embeddings', torch.randn(n_codes, embedding_dim))
         self.register_buffer('N', torch.zeros(n_codes))
         self.register_buffer('z_avg', self.embeddings.data.clone())
 
+        self.beta = beta
         self.n_codes = n_codes
         self.embedding_dim = embedding_dim
         self._need_init = True
@@ -200,7 +221,7 @@ class Codebook(nn.Module):
         embeddings = F.embedding(encoding_indices, self.embeddings)
         embeddings = shift_dim(embeddings, -1, 1)
 
-        commitment_loss = 0.25 * F.mse_loss(z, embeddings.detach())
+        commitment_loss = self.beta * F.mse_loss(z, embeddings.detach())
 
         # EMA codebook update
         if self.training:
@@ -231,8 +252,12 @@ class Codebook(nn.Module):
         avg_probs = torch.mean(encode_onehot, dim=0)
         perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
 
+        # # Add a safe perplexity calculation
+        safe_avg_probs = torch.clamp(avg_probs, min=1e-7, max=1.0)
+        safe_perplexity = torch.exp(-torch.sum(safe_avg_probs * torch.log(safe_avg_probs)))
+
         return dict(embeddings=embeddings_st, encodings=encoding_indices,
-                    commitment_loss=commitment_loss, perplexity=perplexity)
+                    commitment_loss=commitment_loss, perplexity=perplexity, safe_perplexity=safe_perplexity)
 
     def dictionary_lookup(self, encodings):
         embeddings = F.embedding(encodings, self.embeddings)

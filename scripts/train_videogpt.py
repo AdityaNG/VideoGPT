@@ -12,7 +12,7 @@ def main():
     parser = pl.Trainer.add_argparse_args(parser)
     parser = VideoGPT.add_model_specific_args(parser)
     parser.add_argument('--data_path', type=str, default="video_dataset")
-    parser.add_argument('--sequence_length', type=int, default=16)
+    parser.add_argument('--sequence_length', type=int, default=8)
     parser.add_argument('--resolution', type=int, default=128)
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--num_workers', type=int, default=8)

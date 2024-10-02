@@ -152,8 +152,7 @@ class VideoGPT(pl.LightningModule):
 
         loss, _ = self(x, targets, cond)
 
-        if batch_idx % 10 == 0:
-            self.log('train/loss', loss, prog_bar=True)
+        self.log('train/loss', loss)
 
         if batch_idx % 1000 == 0:
             with torch.no_grad():
@@ -209,7 +208,7 @@ class VideoGPT(pl.LightningModule):
         # VideoGPT hyperparmeters
         parser.add_argument('--hidden_dim', type=int, default=576)
         parser.add_argument('--heads', type=int, default=4)
-        parser.add_argument('--layers', type=int, default=8)
+        parser.add_argument('--layers', type=int, default=32)
         parser.add_argument('--dropout', type=float, default=0.2)
         parser.add_argument('--attn_type', type=str, default='full',
                             choices=['full', 'sparse'])
